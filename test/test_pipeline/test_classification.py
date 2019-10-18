@@ -13,7 +13,7 @@ import sklearn.model_selection
 import sklearn.ensemble
 import sklearn.svm
 from sklearn.utils.testing import assert_array_almost_equal
-from sklearn.externals.joblib import Memory
+from joblib import Memory
 
 from ConfigSpace.configuration_space import ConfigurationSpace, \
     Configuration

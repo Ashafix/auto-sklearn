@@ -828,7 +828,7 @@ class AutoSklearnRegressor(AutoSklearnEstimator):
 
 def get_number_of_available_cores():
     try:
-        n = os.sched_getaffinity(0)
+        n = len(os.sched_getaffinity(0))
     except AttributeError:
         n = os.cpu_count()
 
