@@ -11,7 +11,8 @@ import numpy as np
 import numpy.ma as npma
 
 import autosklearn.pipeline.util as putil
-from autosklearn.estimators import AutoSklearnEstimator
+import autosklearn.estimators
+from autosklearn.estimators import AutoSklearnEstimator, get_number_of_available_cores
 from autosklearn.classification import AutoSklearnClassifier
 from autosklearn.regression import AutoSklearnRegressor
 from autosklearn.metrics import accuracy, f1_macro, mean_squared_error
@@ -431,6 +432,7 @@ class EstimatorTest(Base, unittest.TestCase):
         self.assertEqual(len(_fit_automl_patch.call_args[1]), 3)
         self.assertTrue(_fit_automl_patch.call_args[1]['load_models'])
 
+
     def test_fit_n_jobs_2(self):
         tmp = os.path.join(self.test_dir, '..', '.tmp_estimator_fit_pSMAC')
         output = os.path.join(self.test_dir, '..', '.out_estimator_fit_pSMAC')
@@ -481,54 +483,34 @@ class EstimatorTest(Base, unittest.TestCase):
         self.assertEqual(len(seeds), 1)
 
     @unittest.mock.patch('autosklearn.estimators.AutoSklearnEstimator.build_automl')
-    @unittest.mock.patch('multiprocessing.Process', autospec=True)
-    @unittest.mock.patch('autosklearn.estimators._fit_automl')
-    def test_fit_n_jobs_negative(self, _fit_automl_patch, Process_patch, build_automl_patch):
+    def test_fit_n_jobs_negative(self, build_automl_patch):
+        n_cores = get_number_of_available_cores()
         cls = AutoSklearnEstimator(n_jobs=-1)
         cls.fit()
-        # Plus the one from the first call
-        self.assertEqual(build_automl_patch.call_count, 6)
-        self.assertEqual(len(cls._automl), 5)
-        for i in range(1, 6):
-            self.assertEqual(len(build_automl_patch.call_args_list[i][0]), 0)
-            self.assertEqual(len(build_automl_patch.call_args_list[i][1]), 7)
-            # Thee seed is a magic mock so there is nothing to compare here...
-            self.assertIn('seed', build_automl_patch.call_args_list[i][1])
-            self.assertEqual(
-                build_automl_patch.call_args_list[i][1]['shared_mode'],
-                True,
-            )
-            self.assertEqual(
-                build_automl_patch.call_args_list[i][1]['ensemble_size'],
-                50 if i == 1 else 0,
-            )
-            self.assertEqual(
-                build_automl_patch.call_args_list[i][1][
-                    'initial_configurations_via_metalearning'
-                ],
-                25 if i == 1 else 0,
-            )
-            if i > 1:
-                self.assertEqual(
-                    build_automl_patch.call_args_list[i][1][
-                        'smac_scenario_args']['initial_incumbent'],
-                    'RANDOM',
-                )
+        self.assertEqual(len(cls._automl), n_cores)
 
-        self.assertEqual(Process_patch.start.call_count, 4)
-        for i in range(2, 6):
-            self.assertEqual(
-                len(Process_patch.call_args_list[i - 2][1]['kwargs']), 3,
-            )
-            self.assertFalse(
-                Process_patch.call_args_list[i - 2][1]['kwargs']['load_models']
-            )
-        self.assertEqual(Process_patch.join.call_count, 4)
+    def test_get_number_of_available_cores(self):
+        n_cores = get_number_of_available_cores()
+        self.assertGreaterEqual(n_cores, 1)
 
-        self.assertEqual(_fit_automl_patch.call_count, 1)
-        self.assertEqual(len(_fit_automl_patch.call_args[0]), 0)
-        self.assertEqual(len(_fit_automl_patch.call_args[1]), 3)
-        self.assertTrue(_fit_automl_patch.call_args[1]['load_models'])
+    @unittest.mock.patch('autosklearn.estimators.os.sched_getaffinity')
+    def test_get_number_of_available_cores_overwrite_function(self, mocked):
+        mocked.return_value = set([1, 2, 3, 4])
+        self.assertEqual(get_number_of_available_cores(), 4)
+
+    @unittest.mock.patch('autosklearn.estimators.os')
+    def test_get_number_of_available_cores_no_linux(self, mocked_os):
+        delattr(mocked_os, 'sched_getaffinity')
+        mocked_os.cpu_count.return_value = -1
+        self.assertEqual(autosklearn.estimators.os.cpu_count(), -1)
+        self.assertEqual(get_number_of_available_cores(), -1)
+
+    @unittest.mock.patch('autosklearn.estimators.os')
+    def test_get_number_of_available_cores_undefined(self, mocked_os):
+        delattr(mocked_os, 'sched_getaffinity')
+        mocked_os.cpu_count.return_value = None
+        self.assertEqual(autosklearn.estimators.os.cpu_count(), None)
+        self.assertEqual(get_number_of_available_cores(), 1)
 
 
 class AutoMLClassifierTest(Base, unittest.TestCase):
