@@ -827,6 +827,12 @@ class AutoSklearnRegressor(AutoSklearnEstimator):
 
 
 def get_number_of_available_cores():
+    """
+    Returns the number of available logical cores on the system
+    First tries to use os.sched_getaffinity, if it is not available use os.cpu_count
+    :return: Number of cores, int
+    """
+
     try:
         n = len(os.sched_getaffinity(0))
     except AttributeError:
